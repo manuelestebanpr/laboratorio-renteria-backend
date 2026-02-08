@@ -6,6 +6,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "group_permissions")
+@IdClass(GroupPermissionId.class)
 public class GroupPermission {
 
     @Id
@@ -15,14 +16,6 @@ public class GroupPermission {
     @Id
     @Column(name = "permission_id", nullable = false)
     private UUID permissionId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "group_id", insertable = false, updatable = false)
-    private Group group;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "permission_id", insertable = false, updatable = false)
-    private Permission permission;
 
     public GroupPermission() {}
 
@@ -45,21 +38,5 @@ public class GroupPermission {
 
     public void setPermissionId(UUID permissionId) {
         this.permissionId = permissionId;
-    }
-
-    public Group getGroup() {
-        return group;
-    }
-
-    public void setGroup(Group group) {
-        this.group = group;
-    }
-
-    public Permission getPermission() {
-        return permission;
-    }
-
-    public void setPermission(Permission permission) {
-        this.permission = permission;
     }
 }

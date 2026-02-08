@@ -8,6 +8,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "user_groups")
+@IdClass(UserGroupId.class)
 public class UserGroup {
 
     @Id
@@ -24,14 +25,6 @@ public class UserGroup {
 
     @Column(name = "assigned_by")
     private UUID assignedBy;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", insertable = false, updatable = false)
-    private User user;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "group_id", insertable = false, updatable = false)
-    private Group group;
 
     public UserGroup() {}
 
@@ -71,21 +64,5 @@ public class UserGroup {
 
     public void setAssignedBy(UUID assignedBy) {
         this.assignedBy = assignedBy;
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
-    }
-
-    public Group getGroup() {
-        return group;
-    }
-
-    public void setGroup(Group group) {
-        this.group = group;
     }
 }

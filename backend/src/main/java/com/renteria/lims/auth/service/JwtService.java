@@ -27,7 +27,15 @@ public class JwtService {
 
     public JwtService(JwtConfig jwtConfig) {
         this.jwtConfig = jwtConfig;
-        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtConfig.getSecret()));
+        this.signingKey = createSigningKey(jwtConfig.getSecret());
+    }
+
+    private SecretKey createSigningKey(String secret) {
+        try {
+            return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
+        } catch (Exception e) {
+            return Keys.hmacShaKeyFor(secret.getBytes());
+        }
     }
 
     public String generateAccessToken(UUID userId, String email, Role role, Set<String> permissions) {

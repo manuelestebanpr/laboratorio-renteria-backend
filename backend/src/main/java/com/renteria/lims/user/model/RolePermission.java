@@ -6,6 +6,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "role_permissions")
+@IdClass(RolePermissionId.class)
 public class RolePermission {
 
     @Id
@@ -14,12 +15,8 @@ public class RolePermission {
     private Role role;
 
     @Id
-    @Column(nullable = false)
+    @Column(name = "permission_id", nullable = false)
     private UUID permissionId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "permission_id", insertable = false, updatable = false)
-    private Permission permission;
 
     public RolePermission() {}
 
@@ -42,13 +39,5 @@ public class RolePermission {
 
     public void setPermissionId(UUID permissionId) {
         this.permissionId = permissionId;
-    }
-
-    public Permission getPermission() {
-        return permission;
-    }
-
-    public void setPermission(Permission permission) {
-        this.permission = permission;
     }
 }
