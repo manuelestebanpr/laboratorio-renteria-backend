@@ -1,0 +1,50 @@
+# Compiled files
+*.class
+*.jar
+*.war
+*.ear
+target/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.h2.db
+*.mv.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Misc
+*.tmp
+*.temp
+.cache/

@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: false
+
+  mail:
+    host: localhost
+    port: 3025
+
+app:
+  jwt:
+    secret: test-secret-minimum-32-chars-long!!
+    access-token-expiry-ms: 900000
+    refresh-token-expiry-ms: 604800000
+
+  security:
+    max-login-attempts: 5
+    lockout-duration-ms: 900000
+    password-reset-expiry-ms: 3600000
+    max-reset-tokens-per-user: 3
+
+  email:
+    from: test@localhost
+    frontend-url: http://localhost:4200
+
+logging:
+  level:
+    com.renteria.lims: WARN
+    org.springframework.security: WARN

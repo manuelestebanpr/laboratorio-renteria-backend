@@ -1,0 +1,49 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/renteria_lims
+    username: renteria
+    password: dev_password_only
+
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+app:
+  jwt:
+    secret: dev-secret-minimum-32-chars-long-for-hmac-sha256-!!
+    access-token-expiry-ms: 900000
+    refresh-token-expiry-ms: 604800000
+
+  security:
+    max-login-attempts: 5
+    lockout-duration-ms: 900000
+    password-reset-expiry-ms: 3600000
+    max-reset-tokens-per-user: 3
+
+  email:
+    from: noreply@laboratoriorenteria.dev
+    frontend-url: http://localhost:4200
+
+  cors:
+    allowed-origins: http://localhost:4200
+
+logging:
+  level:
+    com.renteria.lims: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Cuenta Bloqueada</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #dc2626; color: white; padding: 20px; text-align: center; }
+        .content { background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; }
+        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }
+        .button { display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { font-size: 12px; color: #6b7280; text-align: center; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Cuenta Temporalmente Bloqueada</h1>
+        </div>
+        <div class="content">
+            <p>Por razones de seguridad, tu cuenta ha sido temporalmente bloqueada debido a múltiples intentos fallidos de inicio de sesión.</p>
+            
+            <div class="warning">
+                <strong>Tu cuenta será desbloqueada automáticamente en <span th:text="${lockoutMinutes}">15</span> minutos.</strong>
+            </div>
+            
+            <p>Si no reconoces esta actividad, te recomendamos:</p>
+            <ul>
+                <li>Espere a que se desbloquee su cuenta</li>
+                <li>Cambie su contraseña inmediatamente después de iniciar sesión</li>
+                <li>Contacte al soporte si sospecha de actividad no autorizada</li>
+            </ul>
+            
+            <a th:href="${frontendUrl} + '/login'" class="button">Ir al Inicio de Sesión</a>
+        </div>
+        <div class="footer">
+            <p>Laboratorio Clínico Renteria - Seguridad de la Cuenta</p>
+        </div>
+    </div>
+</body>
+</html>
