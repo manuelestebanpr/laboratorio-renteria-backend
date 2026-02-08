@@ -7,7 +7,6 @@ import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -42,6 +41,7 @@ public class SmtpEmailService implements EmailService {
             log.info("Initial password email sent to: {}", maskEmail(to));
         } catch (Exception e) {
             log.error("Failed to send initial password email to: {}", maskEmail(to), e);
+            throw new RuntimeException("Failed to send initial password email", e);
         }
     }
 
@@ -59,6 +59,7 @@ public class SmtpEmailService implements EmailService {
             log.info("Password reset email sent to: {}", maskEmail(to));
         } catch (Exception e) {
             log.error("Failed to send password reset email to: {}", maskEmail(to), e);
+            throw new RuntimeException("Failed to send password reset email", e);
         }
     }
 
@@ -75,6 +76,7 @@ public class SmtpEmailService implements EmailService {
             log.info("Account lockout email sent to: {}", maskEmail(to));
         } catch (Exception e) {
             log.error("Failed to send account lockout email to: {}", maskEmail(to), e);
+            throw new RuntimeException("Failed to send account lockout email", e);
         }
     }
 

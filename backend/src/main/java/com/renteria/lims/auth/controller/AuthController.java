@@ -32,20 +32,36 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
-        log.debug("Login attempt for: {}", request.email());
+        log.debug("Login attempt for: {}", maskEmail(request.email()));
         
-        LoginResponse loginResponse = authService.login(request);
+        AuthService.LoginResult result = authService.login(request);
         
-        return ResponseEntity.ok(loginResponse);
+        // Set refresh token as HttpOnly cookie
+        Cookie cookie = new Cookie(REFRESH_COOKIE_NAME, result.rawRefreshToken());
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/api/v1/auth");
+        cookie.setMaxAge((int) (jwtService.getAccessTokenExpiryMs() * 7 / 1000)); // 7 days
+        response.addCookie(cookie);
+        
+        return ResponseEntity.ok(result.response());
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<RefreshResponse> refresh(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = extractRefreshToken(request);
         
-        RefreshResponse refreshResponse = authService.refresh(refreshToken);
+        AuthService.RefreshResult result = authService.refresh(refreshToken);
         
-        return ResponseEntity.ok(refreshResponse);
+        // Set new refresh token as HttpOnly cookie
+        Cookie cookie = new Cookie(REFRESH_COOKIE_NAME, result.rawRefreshToken());
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/api/v1/auth");
+        cookie.setMaxAge((int) (jwtService.getAccessTokenExpiryMs() * 7 / 1000)); // 7 days
+        response.addCookie(cookie);
+        
+        return ResponseEntity.ok(result.response());
     }
 
     @PostMapping("/logout")
@@ -102,5 +118,12 @@ public class AuthController {
             }
         }
         return null;
+    }
+    
+    private String maskEmail(String email) {
+        if (email == null || email.length() < 5) return "***";
+        int atIndex = email.indexOf('@');
+        if (atIndex < 2) return "***";
+        return email.substring(0, 2) + "***@" + email.substring(atIndex + 1);
     }
 }

@@ -33,22 +33,24 @@ class RefreshTokenServiceTest {
     }
 
     @Test
-    void createRefreshToken_withUserId_savesAndReturnsToken() {
+    void createRefreshToken_withUserId_savesAndReturnsTokenResult() {
         UUID userId = UUID.randomUUID();
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        RefreshToken result = refreshTokenService.createRefreshToken(userId);
+        RefreshTokenService.RefreshTokenResult result = refreshTokenService.createRefreshToken(userId);
 
         assertNotNull(result);
-        assertEquals(userId, result.getUserId());
-        assertNotNull(result.getTokenHash());
-        assertNotNull(result.getFamilyId());
-        assertTrue(result.getExpiresAt().isAfter(Instant.now()));
+        assertNotNull(result.rawToken());
+        assertNotNull(result.token());
+        assertEquals(userId, result.token().getUserId());
+        assertNotNull(result.token().getTokenHash());
+        assertNotNull(result.token().getFamilyId());
+        assertTrue(result.token().getExpiresAt().isAfter(Instant.now()));
         verify(refreshTokenRepository).save(any());
     }
 
     @Test
-    void rotateRefreshToken_withValidToken_returnsNewToken() {
+    void rotateRefreshToken_withValidToken_returnsNewTokenResult() {
         UUID userId = UUID.randomUUID();
         UUID familyId = UUID.randomUUID();
         RefreshToken existing = new RefreshToken(userId, "hash", familyId, Instant.now().plusSeconds(3600));
@@ -56,11 +58,12 @@ class RefreshTokenServiceTest {
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(existing));
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Optional<RefreshToken> result = refreshTokenService.rotateRefreshToken("raw-token");
+        Optional<RefreshTokenService.RefreshTokenResult> result = refreshTokenService.rotateRefreshToken("raw-token");
 
         assertTrue(result.isPresent());
-        assertEquals(userId, result.get().getUserId());
-        assertEquals(familyId, result.get().getFamilyId());
+        assertNotNull(result.get().rawToken());
+        assertEquals(userId, result.get().token().getUserId());
+        assertEquals(familyId, result.get().token().getFamilyId());
     }
 
     @Test
@@ -72,7 +75,7 @@ class RefreshTokenServiceTest {
         
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(existing));
 
-        Optional<RefreshToken> result = refreshTokenService.rotateRefreshToken("raw-token");
+        Optional<RefreshTokenService.RefreshTokenResult> result = refreshTokenService.rotateRefreshToken("raw-token");
 
         assertTrue(result.isEmpty());
         verify(refreshTokenRepository).revokeByFamilyId(familyId);
@@ -85,7 +88,7 @@ class RefreshTokenServiceTest {
         
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(existing));
 
-        Optional<RefreshToken> result = refreshTokenService.rotateRefreshToken("raw-token");
+        Optional<RefreshTokenService.RefreshTokenResult> result = refreshTokenService.rotateRefreshToken("raw-token");
 
         assertTrue(result.isEmpty());
     }
@@ -94,7 +97,7 @@ class RefreshTokenServiceTest {
     void rotateRefreshToken_withNonExistentToken_returnsEmpty() {
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());
 
-        Optional<RefreshToken> result = refreshTokenService.rotateRefreshToken("raw-token");
+        Optional<RefreshTokenService.RefreshTokenResult> result = refreshTokenService.rotateRefreshToken("raw-token");
 
         assertTrue(result.isEmpty());
     }

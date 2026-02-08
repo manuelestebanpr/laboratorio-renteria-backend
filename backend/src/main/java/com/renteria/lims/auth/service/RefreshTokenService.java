@@ -30,7 +30,7 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public RefreshToken createRefreshToken(UUID userId) {
+    public RefreshTokenResult createRefreshToken(UUID userId) {
         String rawToken = UUID.randomUUID().toString();
         String tokenHash = hashToken(rawToken);
         UUID familyId = UUID.randomUUID();
@@ -40,11 +40,11 @@ public class RefreshTokenService {
         RefreshToken saved = refreshTokenRepository.save(refreshToken);
         
         log.debug("Created refresh token for user {} with family {}", userId, familyId);
-        return saved;
+        return new RefreshTokenResult(saved, rawToken);
     }
 
     @Transactional
-    public Optional<RefreshToken> rotateRefreshToken(String rawToken) {
+    public Optional<RefreshTokenResult> rotateRefreshToken(String rawToken) {
         String tokenHash = hashToken(rawToken);
         
         Optional<RefreshToken> existingOpt = refreshTokenRepository.findByTokenHash(tokenHash);
@@ -83,7 +83,7 @@ public class RefreshTokenService {
         RefreshToken saved = refreshTokenRepository.save(newToken);
         log.debug("Rotated refresh token for user {}", existing.getUserId());
         
-        return Optional.of(saved);
+        return Optional.of(new RefreshTokenResult(saved, newRawToken));
     }
 
     @Transactional
@@ -98,10 +98,6 @@ public class RefreshTokenService {
         log.info("Revoked {} tokens for user {}", revoked, userId);
     }
 
-    public String getRawToken(RefreshToken refreshToken) {
-        return refreshToken.getTokenHash();
-    }
-
     String hashToken(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -110,5 +106,11 @@ public class RefreshTokenService {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not available", e);
         }
+    }
+
+    public record RefreshTokenResult(RefreshToken token, String rawToken) {}
+
+    public String getTokenHash(String rawToken) {
+        return hashToken(rawToken);
     }
 }

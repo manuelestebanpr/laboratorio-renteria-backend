@@ -42,7 +42,7 @@ class AuthControllerTest {
             false,
             new LoginResponse.UserInfo(UUID.randomUUID(), "test@example.com", "PATIENT", "Test User")
         );
-        when(authService.login(any())).thenReturn(response);
+        when(authService.login(any())).thenReturn(new AuthService.LoginResult(response, "refresh-token-uuid"));
 
         mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -84,7 +84,8 @@ class AuthControllerTest {
 
     @Test
     void refresh_withValidToken_returns200() throws Exception {
-        when(authService.refresh(any())).thenReturn(new RefreshResponse("new-token", 900));
+        RefreshResponse response = new RefreshResponse("new-token", 900);
+        when(authService.refresh(any())).thenReturn(new AuthService.RefreshResult(response, "new-refresh-token"));
 
         mockMvc.perform(post("/api/v1/auth/refresh")
                 .cookie(new jakarta.servlet.http.Cookie("refresh_token", "valid-token")))

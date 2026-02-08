@@ -1,17 +1,18 @@
 package com.renteria.lims.auth.service;
 
 import com.renteria.lims.auth.model.PasswordResetToken;
-import com.renteria.lims.auth.model.RefreshToken;
 import com.renteria.lims.auth.model.dto.*;
 import com.renteria.lims.auth.repository.PasswordResetTokenRepository;
 import com.renteria.lims.auth.repository.RefreshTokenRepository;
 import com.renteria.lims.config.JwtConfig;
 import com.renteria.lims.config.SecurityConfigProps;
 import com.renteria.lims.email.service.EmailService;
-import com.renteria.lims.user.model.Role;
 import com.renteria.lims.user.model.User;
 import com.renteria.lims.user.repository.PermissionRepository;
 import com.renteria.lims.user.repository.UserRepository;
+import io.github.bucket4j.Bandwidth;
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.Refill;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,7 +21,6 @@ import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,11 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
@@ -49,6 +51,10 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final SecurityConfigProps securityConfig;
     private final EmailService emailService;
+    
+    // Rate limiting buckets
+    private final ConcurrentHashMap<String, Bucket> loginBuckets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Bucket> resetBuckets = new ConcurrentHashMap<>();
 
     public AuthService(AuthenticationManager authenticationManager,
                        UserRepository userRepository,
@@ -73,25 +79,33 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResponse login(LoginRequest request) {
-        Optional<User> userOpt = userRepository.findByEmail(request.email().toLowerCase().trim());
+    public LoginResult login(LoginRequest request) {
+        String normalizedEmail = request.email().toLowerCase().trim();
+        
+        // Check rate limit
+        if (!checkLoginLimit(normalizedEmail)) {
+            log.warn("Rate limit exceeded for login: {}", maskEmail(normalizedEmail));
+            throw new BadCredentialsException("Too many login attempts. Please try again later.");
+        }
+        
+        Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
         
         if (userOpt.isEmpty()) {
-            log.warn("Login attempt for non-existent email: {}", maskEmail(request.email()));
+            log.warn("Login attempt for non-existent email: {}", maskEmail(normalizedEmail));
             throw new BadCredentialsException("Invalid credentials");
         }
 
         User user = userOpt.get();
 
         if (user.isLocked()) {
-            log.warn("Login attempt for locked account: {}", maskEmail(request.email()));
+            log.warn("Login attempt for locked account: {}", maskEmail(normalizedEmail));
             throw new LockedException("Account is locked");
         }
 
         try {
             Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                    request.email().toLowerCase().trim(),
+                    normalizedEmail,
                     request.password()
                 )
             );
@@ -104,18 +118,20 @@ public class AuthService {
 
             Set<String> permissions = permissionRepository.findEffectivePermissions(user.getId(), user.getRole().name());
             String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getRole(), permissions);
-            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
+            RefreshTokenService.RefreshTokenResult refreshResult = refreshTokenService.createRefreshToken(user.getId());
 
             String fullName = getUserFullName(user);
 
-            log.info("Successful login for user: {}", maskEmail(request.email()));
+            log.info("Successful login for user: {}", maskEmail(normalizedEmail));
 
-            return new LoginResponse(
+            LoginResponse response = new LoginResponse(
                 accessToken,
                 jwtService.getAccessTokenExpiryMs() / 1000,
                 user.isForcePasswordChange(),
                 new LoginResponse.UserInfo(user.getId(), user.getEmail(), user.getRole().name(), fullName)
             );
+            
+            return new LoginResult(response, refreshResult.rawToken());
 
         } catch (BadCredentialsException e) {
             handleFailedLogin(user);
@@ -124,19 +140,19 @@ public class AuthService {
     }
 
     @Transactional
-    public RefreshResponse refresh(String refreshTokenCookie) {
+    public RefreshResult refresh(String refreshTokenCookie) {
         if (refreshTokenCookie == null || refreshTokenCookie.isBlank()) {
             throw new BadCredentialsException("Refresh token required");
         }
 
-        Optional<RefreshToken> rotatedOpt = refreshTokenService.rotateRefreshToken(refreshTokenCookie);
+        Optional<RefreshTokenService.RefreshTokenResult> rotatedOpt = refreshTokenService.rotateRefreshToken(refreshTokenCookie);
         
         if (rotatedOpt.isEmpty()) {
             throw new BadCredentialsException("Invalid refresh token");
         }
 
-        RefreshToken rotated = rotatedOpt.get();
-        User user = userRepository.findById(rotated.getUserId())
+        RefreshTokenService.RefreshTokenResult rotated = rotatedOpt.get();
+        User user = userRepository.findById(rotated.token().getUserId())
             .orElseThrow(() -> new BadCredentialsException("User not found"));
 
         Set<String> permissions = permissionRepository.findEffectivePermissions(user.getId(), user.getRole().name());
@@ -144,7 +160,8 @@ public class AuthService {
 
         log.debug("Token refreshed for user: {}", maskEmail(user.getEmail()));
 
-        return new RefreshResponse(accessToken, jwtService.getAccessTokenExpiryMs() / 1000);
+        RefreshResponse response = new RefreshResponse(accessToken, jwtService.getAccessTokenExpiryMs() / 1000);
+        return new RefreshResult(response, rotated.rawToken());
     }
 
     @Transactional
@@ -178,10 +195,18 @@ public class AuthService {
 
     @Transactional
     public void requestPasswordReset(PasswordResetRequest request) {
-        Optional<User> userOpt = userRepository.findByEmail(request.email().toLowerCase().trim());
+        String normalizedEmail = request.email().toLowerCase().trim();
+        
+        // Check rate limit
+        if (!checkResetLimit(normalizedEmail)) {
+            log.warn("Rate limit exceeded for password reset: {}", maskEmail(normalizedEmail));
+            return;
+        }
+        
+        Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
         
         if (userOpt.isEmpty()) {
-            log.debug("Password reset requested for non-existent email: {}", maskEmail(request.email()));
+            log.debug("Password reset requested for non-existent email: {}", maskEmail(normalizedEmail));
             return;
         }
 
@@ -200,9 +225,13 @@ public class AuthService {
         PasswordResetToken resetToken = new PasswordResetToken(user.getId(), tokenHash, expiresAt);
         passwordResetTokenRepository.save(resetToken);
 
-        emailService.sendPasswordReset(user.getEmail(), rawToken);
-        
-        log.info("Password reset token created for user: {}", maskEmail(user.getEmail()));
+        try {
+            emailService.sendPasswordReset(user.getEmail(), rawToken);
+            log.info("Password reset token created and email sent for user: {}", maskEmail(user.getEmail()));
+        } catch (Exception e) {
+            log.error("Failed to send password reset email to: {}", maskEmail(user.getEmail()), e);
+            throw new RuntimeException("Failed to send password reset email. Please try again later.", e);
+        }
     }
 
     @Transactional
@@ -265,4 +294,28 @@ public class AuthService {
             throw new RuntimeException("SHA-256 algorithm not available", e);
         }
     }
+    
+    // Rate limiting methods
+    private boolean checkLoginLimit(String email) {
+        Bucket bucket = loginBuckets.computeIfAbsent(email.toLowerCase(), k -> createLoginBucket());
+        return bucket.tryConsume(1);
+    }
+
+    private boolean checkResetLimit(String email) {
+        Bucket bucket = resetBuckets.computeIfAbsent(email.toLowerCase(), k -> createResetBucket());
+        return bucket.tryConsume(1);
+    }
+
+    private Bucket createLoginBucket() {
+        Bandwidth limit = Bandwidth.classic(5, Refill.intervally(5, Duration.ofMinutes(15)));
+        return Bucket.builder().addLimit(limit).build();
+    }
+
+    private Bucket createResetBucket() {
+        Bandwidth limit = Bandwidth.classic(3, Refill.intervally(3, Duration.ofHours(1)));
+        return Bucket.builder().addLimit(limit).build();
+    }
+    
+    public record LoginResult(LoginResponse response, String rawRefreshToken) {}
+    public record RefreshResult(RefreshResponse response, String rawRefreshToken) {}
 }

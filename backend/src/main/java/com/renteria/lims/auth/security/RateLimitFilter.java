@@ -19,7 +19,9 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Component
+// DISABLED: Rate limiting moved to AuthService for proper JSON body handling
+// This filter is kept for reference but not registered as a Spring component
+// @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
