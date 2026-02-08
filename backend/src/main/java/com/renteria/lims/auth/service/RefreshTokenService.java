@@ -2,17 +2,14 @@ package com.renteria.lims.auth.service;
 
 import com.renteria.lims.auth.model.RefreshToken;
 import com.renteria.lims.auth.repository.RefreshTokenRepository;
+import com.renteria.lims.common.util.TokenUtils;
 import com.renteria.lims.config.JwtConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,7 +29,7 @@ public class RefreshTokenService {
     @Transactional
     public RefreshTokenResult createRefreshToken(UUID userId) {
         String rawToken = UUID.randomUUID().toString();
-        String tokenHash = hashToken(rawToken);
+        String tokenHash = TokenUtils.sha256Hex(rawToken);
         UUID familyId = UUID.randomUUID();
         Instant expiresAt = Instant.now().plusMillis(jwtConfig.getRefreshTokenExpiryMs());
 
@@ -45,7 +42,7 @@ public class RefreshTokenService {
 
     @Transactional
     public Optional<RefreshTokenResult> rotateRefreshToken(String rawToken) {
-        String tokenHash = hashToken(rawToken);
+        String tokenHash = TokenUtils.sha256Hex(rawToken);
         
         Optional<RefreshToken> existingOpt = refreshTokenRepository.findByTokenHash(tokenHash);
         if (existingOpt.isEmpty()) {
@@ -70,7 +67,7 @@ public class RefreshTokenService {
         refreshTokenRepository.save(existing);
 
         String newRawToken = UUID.randomUUID().toString();
-        String newTokenHash = hashToken(newRawToken);
+        String newTokenHash = TokenUtils.sha256Hex(newRawToken);
         Instant newExpiresAt = Instant.now().plusMillis(jwtConfig.getRefreshTokenExpiryMs());
 
         RefreshToken newToken = new RefreshToken(
@@ -98,19 +95,9 @@ public class RefreshTokenService {
         log.info("Revoked {} tokens for user {}", revoked, userId);
     }
 
-    String hashToken(String token) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
-        }
+    public String getTokenHash(String rawToken) {
+        return TokenUtils.sha256Hex(rawToken);
     }
 
     public record RefreshTokenResult(RefreshToken token, String rawToken) {}
-
-    public String getTokenHash(String rawToken) {
-        return hashToken(rawToken);
-    }
 }

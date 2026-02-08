@@ -1,12 +1,12 @@
 package com.renteria.lims.email.service;
 
+import com.renteria.lims.common.util.StringUtils;
 import com.renteria.lims.config.EmailConfig;
 import com.renteria.lims.email.model.EmailTemplate;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -38,9 +38,9 @@ public class SmtpEmailService implements EmailService {
         
         try {
             sendHtmlEmail(to, EmailTemplate.INITIAL_PASSWORD.getSubject(), htmlContent);
-            log.info("Initial password email sent to: {}", maskEmail(to));
+            log.info("Initial password email sent to: {}", StringUtils.maskEmail(to));
         } catch (Exception e) {
-            log.error("Failed to send initial password email to: {}", maskEmail(to), e);
+            log.error("Failed to send initial password email to: {}", StringUtils.maskEmail(to), e);
             throw new RuntimeException("Failed to send initial password email", e);
         }
     }
@@ -56,9 +56,9 @@ public class SmtpEmailService implements EmailService {
         
         try {
             sendHtmlEmail(to, EmailTemplate.PASSWORD_RESET.getSubject(), htmlContent);
-            log.info("Password reset email sent to: {}", maskEmail(to));
+            log.info("Password reset email sent to: {}", StringUtils.maskEmail(to));
         } catch (Exception e) {
-            log.error("Failed to send password reset email to: {}", maskEmail(to), e);
+            log.error("Failed to send password reset email to: {}", StringUtils.maskEmail(to), e);
             throw new RuntimeException("Failed to send password reset email", e);
         }
     }
@@ -73,9 +73,9 @@ public class SmtpEmailService implements EmailService {
         
         try {
             sendHtmlEmail(to, EmailTemplate.ACCOUNT_LOCKOUT.getSubject(), htmlContent);
-            log.info("Account lockout email sent to: {}", maskEmail(to));
+            log.info("Account lockout email sent to: {}", StringUtils.maskEmail(to));
         } catch (Exception e) {
-            log.error("Failed to send account lockout email to: {}", maskEmail(to), e);
+            log.error("Failed to send account lockout email to: {}", StringUtils.maskEmail(to), e);
             throw new RuntimeException("Failed to send account lockout email", e);
         }
     }
@@ -88,12 +88,5 @@ public class SmtpEmailService implements EmailService {
         helper.setSubject(subject);
         helper.setText(htmlContent, true);
         mailSender.send(message);
-    }
-
-    private String maskEmail(String email) {
-        if (email == null || email.length() < 5) return "***";
-        int atIndex = email.indexOf('@');
-        if (atIndex < 2) return "***";
-        return email.substring(0, 2) + "***@" + email.substring(atIndex + 1);
     }
 }

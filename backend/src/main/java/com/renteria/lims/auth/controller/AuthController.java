@@ -3,16 +3,19 @@ package com.renteria.lims.auth.controller;
 import com.renteria.lims.auth.model.dto.*;
 import com.renteria.lims.auth.service.AuthService;
 import com.renteria.lims.auth.service.JwtService;
-import jakarta.servlet.http.Cookie;
+import com.renteria.lims.common.util.StringUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.UUID;
 
 @RestController
@@ -32,17 +35,19 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
-        log.debug("Login attempt for: {}", maskEmail(request.email()));
+        log.debug("Login attempt for: {}", StringUtils.maskEmail(request.email()));
         
         AuthService.LoginResult result = authService.login(request);
         
-        // Set refresh token as HttpOnly cookie
-        Cookie cookie = new Cookie(REFRESH_COOKIE_NAME, result.rawRefreshToken());
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/api/v1/auth");
-        cookie.setMaxAge((int) (jwtService.getAccessTokenExpiryMs() * 7 / 1000)); // 7 days
-        response.addCookie(cookie);
+        // Set refresh token as HttpOnly cookie with SameSite=Strict
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, result.rawRefreshToken())
+            .httpOnly(true)
+            .secure(true)
+            .path("/api/v1/auth")
+            .maxAge(Duration.ofDays(7))
+            .sameSite("Strict")
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         
         return ResponseEntity.ok(result.response());
     }
@@ -53,13 +58,15 @@ public class AuthController {
         
         AuthService.RefreshResult result = authService.refresh(refreshToken);
         
-        // Set new refresh token as HttpOnly cookie
-        Cookie cookie = new Cookie(REFRESH_COOKIE_NAME, result.rawRefreshToken());
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/api/v1/auth");
-        cookie.setMaxAge((int) (jwtService.getAccessTokenExpiryMs() * 7 / 1000)); // 7 days
-        response.addCookie(cookie);
+        // Set new refresh token as HttpOnly cookie with SameSite=Strict
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, result.rawRefreshToken())
+            .httpOnly(true)
+            .secure(true)
+            .path("/api/v1/auth")
+            .maxAge(Duration.ofDays(7))
+            .sameSite("Strict")
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         
         return ResponseEntity.ok(result.response());
     }
@@ -71,12 +78,15 @@ public class AuthController {
         
         authService.logout(userId, refreshToken);
         
-        Cookie cookie = new Cookie(REFRESH_COOKIE_NAME, null);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true);
-        cookie.setPath("/api/v1/auth");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        // Clear refresh token cookie with SameSite=Strict
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
+            .httpOnly(true)
+            .secure(true)
+            .path("/api/v1/auth")
+            .maxAge(Duration.ZERO)
+            .sameSite("Strict")
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         
         return ResponseEntity.noContent().build();
     }
@@ -109,21 +119,14 @@ public class AuthController {
     }
 
     private String extractRefreshToken(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
         if (cookies != null) {
-            for (Cookie cookie : cookies) {
+            for (jakarta.servlet.http.Cookie cookie : cookies) {
                 if (REFRESH_COOKIE_NAME.equals(cookie.getName())) {
                     return cookie.getValue();
                 }
             }
         }
         return null;
-    }
-    
-    private String maskEmail(String email) {
-        if (email == null || email.length() < 5) return "***";
-        int atIndex = email.indexOf('@');
-        if (atIndex < 2) return "***";
-        return email.substring(0, 2) + "***@" + email.substring(atIndex + 1);
     }
 }

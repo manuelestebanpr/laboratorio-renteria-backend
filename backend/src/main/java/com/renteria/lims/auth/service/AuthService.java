@@ -4,7 +4,8 @@ import com.renteria.lims.auth.model.PasswordResetToken;
 import com.renteria.lims.auth.model.dto.*;
 import com.renteria.lims.auth.repository.PasswordResetTokenRepository;
 import com.renteria.lims.auth.repository.RefreshTokenRepository;
-import com.renteria.lims.config.JwtConfig;
+import com.renteria.lims.common.util.StringUtils;
+import com.renteria.lims.common.util.TokenUtils;
 import com.renteria.lims.config.SecurityConfigProps;
 import com.renteria.lims.email.service.EmailService;
 import com.renteria.lims.user.model.User;
@@ -25,12 +26,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -84,21 +81,21 @@ public class AuthService {
         
         // Check rate limit
         if (!checkLoginLimit(normalizedEmail)) {
-            log.warn("Rate limit exceeded for login: {}", maskEmail(normalizedEmail));
+            log.warn("Rate limit exceeded for login: {}", StringUtils.maskEmail(normalizedEmail));
             throw new BadCredentialsException("Too many login attempts. Please try again later.");
         }
         
         Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
         
         if (userOpt.isEmpty()) {
-            log.warn("Login attempt for non-existent email: {}", maskEmail(normalizedEmail));
+            log.warn("Login attempt for non-existent email: {}", StringUtils.maskEmail(normalizedEmail));
             throw new BadCredentialsException("Invalid credentials");
         }
 
         User user = userOpt.get();
 
         if (user.isLocked()) {
-            log.warn("Login attempt for locked account: {}", maskEmail(normalizedEmail));
+            log.warn("Login attempt for locked account: {}", StringUtils.maskEmail(normalizedEmail));
             throw new LockedException("Account is locked");
         }
 
@@ -122,7 +119,7 @@ public class AuthService {
 
             String fullName = getUserFullName(user);
 
-            log.info("Successful login for user: {}", maskEmail(normalizedEmail));
+            log.info("Successful login for user: {}", StringUtils.maskEmail(normalizedEmail));
 
             LoginResponse response = new LoginResponse(
                 accessToken,
@@ -158,7 +155,7 @@ public class AuthService {
         Set<String> permissions = permissionRepository.findEffectivePermissions(user.getId(), user.getRole().name());
         String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getRole(), permissions);
 
-        log.debug("Token refreshed for user: {}", maskEmail(user.getEmail()));
+        log.debug("Token refreshed for user: {}", StringUtils.maskEmail(user.getEmail()));
 
         RefreshResponse response = new RefreshResponse(accessToken, jwtService.getAccessTokenExpiryMs() / 1000);
         return new RefreshResult(response, rotated.rawToken());
@@ -190,7 +187,7 @@ public class AuthService {
 
         refreshTokenService.revokeAllUserTokens(userId);
         
-        log.info("Password changed for user: {}", maskEmail(user.getEmail()));
+        log.info("Password changed for user: {}", StringUtils.maskEmail(user.getEmail()));
     }
 
     @Transactional
@@ -199,14 +196,14 @@ public class AuthService {
         
         // Check rate limit
         if (!checkResetLimit(normalizedEmail)) {
-            log.warn("Rate limit exceeded for password reset: {}", maskEmail(normalizedEmail));
+            log.warn("Rate limit exceeded for password reset: {}", StringUtils.maskEmail(normalizedEmail));
             return;
         }
         
         Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
         
         if (userOpt.isEmpty()) {
-            log.debug("Password reset requested for non-existent email: {}", maskEmail(normalizedEmail));
+            log.debug("Password reset requested for non-existent email: {}", StringUtils.maskEmail(normalizedEmail));
             return;
         }
 
@@ -214,12 +211,12 @@ public class AuthService {
 
         long activeTokens = passwordResetTokenRepository.countActiveByUserId(user.getId());
         if (activeTokens >= securityConfig.getMaxResetTokensPerUser()) {
-            log.warn("Max reset tokens reached for user: {}", maskEmail(user.getEmail()));
+            log.warn("Max reset tokens reached for user: {}", StringUtils.maskEmail(user.getEmail()));
             return;
         }
 
         String rawToken = UUID.randomUUID().toString();
-        String tokenHash = hashToken(rawToken);
+        String tokenHash = TokenUtils.sha256Hex(rawToken);
         Instant expiresAt = Instant.now().plusMillis(securityConfig.getPasswordResetExpiryMs());
 
         PasswordResetToken resetToken = new PasswordResetToken(user.getId(), tokenHash, expiresAt);
@@ -227,16 +224,16 @@ public class AuthService {
 
         try {
             emailService.sendPasswordReset(user.getEmail(), rawToken);
-            log.info("Password reset token created and email sent for user: {}", maskEmail(user.getEmail()));
+            log.info("Password reset token created and email sent for user: {}", StringUtils.maskEmail(user.getEmail()));
         } catch (Exception e) {
-            log.error("Failed to send password reset email to: {}", maskEmail(user.getEmail()), e);
+            log.error("Failed to send password reset email to: {}", StringUtils.maskEmail(user.getEmail()), e);
             throw new RuntimeException("Failed to send password reset email. Please try again later.", e);
         }
     }
 
     @Transactional
     public void confirmPasswordReset(PasswordResetConfirm request) {
-        String tokenHash = hashToken(request.token());
+        String tokenHash = TokenUtils.sha256Hex(request.token());
         
         PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenHash(tokenHash)
             .orElseThrow(() -> new IllegalStateException("Invalid or expired reset token"));
@@ -258,7 +255,7 @@ public class AuthService {
 
         refreshTokenService.revokeAllUserTokens(user.getId());
         
-        log.info("Password reset completed for user: {}", maskEmail(user.getEmail()));
+        log.info("Password reset completed for user: {}", StringUtils.maskEmail(user.getEmail()));
     }
 
     private void handleFailedLogin(User user) {
@@ -267,8 +264,15 @@ public class AuthService {
 
         if (attempts >= securityConfig.getMaxLoginAttempts()) {
             user.setLockedUntil(Instant.now().plusMillis(securityConfig.getLockoutDurationMs()));
-            log.warn("Account locked after {} failed attempts: {}", attempts, maskEmail(user.getEmail()));
-            emailService.sendAccountLockout(user.getEmail());
+            log.warn("Account locked after {} failed attempts: {}", attempts, StringUtils.maskEmail(user.getEmail()));
+            
+            // Lockout email is best-effort - must NOT break login flow
+            try {
+                emailService.sendAccountLockout(user.getEmail());
+            } catch (Exception e) {
+                log.error("Failed to send lockout notification to: {}", StringUtils.maskEmail(user.getEmail()), e);
+                // Do NOT rethrow - lockout notification is secondary to the lock itself
+            }
         }
 
         userRepository.save(user);
@@ -276,23 +280,6 @@ public class AuthService {
 
     private String getUserFullName(User user) {
         return user.getEmail();
-    }
-
-    private String maskEmail(String email) {
-        if (email == null || email.length() < 5) return "***";
-        int atIndex = email.indexOf('@');
-        if (atIndex < 2) return "***";
-        return email.substring(0, 2) + "***@" + email.substring(atIndex + 1);
-    }
-
-    private String hashToken(String token) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
-        }
     }
     
     // Rate limiting methods
