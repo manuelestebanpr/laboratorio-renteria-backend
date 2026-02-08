@@ -3,9 +3,9 @@ spring:
     name: renteria-lims
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:renteria_lims}
-    username: ${DB_USER:renteria}
-    password: ${DB_PASSWORD}
+    url: jdbc:postgresql://${DB_HOST:192.168.20.73}:${DB_PORT:5433}/${DB_NAME:renteria_lims}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:mysecretpassword}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -28,8 +28,8 @@ spring:
     baseline-on-migrate: true
 
   mail:
-    host: ${SMTP_HOST:localhost}
-    port: ${SMTP_PORT:1025}
+    host: ${SPRING_MAIL_HOST:192.168.20.73}
+    port: ${SPRING_MAIL_PORT:1025}
     username: ${SMTP_USERNAME:}
     password: ${SMTP_PASSWORD:}
     protocol: smtp
@@ -48,19 +48,19 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:}
-    access-token-expiry-ms: 900000
-    refresh-token-expiry-ms: 604800000
+    secret: ${APP_JWT_SECRET:U2VjcmV0LTM0LWJ5dGVzLXN0cmluZy0xMjM0IQ==}
+    access-token-expiry-ms: ${APP_JWT_ACCESS_TOKEN_EXPIRY_MS:900000}
+    refresh-token-expiry-ms: ${APP_JWT_REFRESH_TOKEN_EXPIRY_MS:604800000}
 
   security:
-    max-login-attempts: 5
-    lockout-duration-ms: 900000
-    password-reset-expiry-ms: 3600000
-    max-reset-tokens-per-user: 3
+    max-login-attempts: ${APP_SECURITY_MAX_LOGIN_ATTEMPTS:5}
+    lockout-duration-ms: ${APP_SECURITY_LOCKOUT_DURATION_MS:900000}
+    password-reset-expiry-ms: ${APP_SECURITY_PASSWORD_RESET_EXPIRY_MS:3600000}
+    max-reset-tokens-per-user: ${APP_SECURITY_MAX_RESET_TOKENS_PER_USER:3}
 
   email:
-    from: ${EMAIL_FROM:noreply@laboratoriorenteria.com}
-    frontend-url: ${FRONTEND_URL:http://localhost:4200}
+    from: ${APP_EMAIL_FROM:noreply@laboratoriorenteria.com}
+    frontend-url: ${APP_EMAIL_FRONTEND_URL:http://localhost:4200}
 
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}

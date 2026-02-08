@@ -43,12 +43,11 @@ Crear archivo `.env` en la raíz:
 
 ```bash
 # Base de datos
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/renteria_lims
 SPRING_DATASOURCE_USERNAME=lims_user
 SPRING_DATASOURCE_PASSWORD=lims_password
 
 # JWT
-APP_JWT_SECRET=tu-secreto-base64-aqui-minimo-32-caracteres!!
+APP_JWT_SECRET=U2VjcmV0LTM0LWJ5dGVzLXN0cmluZy0xMjM0IQ==
 APP_JWT_ACCESS_TOKEN_EXPIRY_MS=900000
 APP_JWT_REFRESH_TOKEN_EXPIRY_MS=604800000
 
